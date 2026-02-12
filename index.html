@@ -222,6 +222,65 @@
     }
     .grand .label{ color: var(--muted); font-size: 12px; }
     .grand .value{ font-size: 20px; font-weight: 1000; margin-top: 6px; }
+
+    /* ===== Modal Nota ===== */
+    .modalOverlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 50;
+    }
+    .modalOverlay.show{ display:flex; }
+    .modal{
+      width: min(640px, 100%);
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(20,30,55,.92), rgba(12,18,35,.92));
+      box-shadow: 0 24px 60px rgba(0,0,0,.55);
+      overflow: hidden;
+    }
+    .modalHd{
+      padding: 14px 16px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+    }
+    .modalHd strong{ font-size: 14px; letter-spacing:.2px; }
+    .modalBd{ padding: 16px; }
+    .modalBd textarea{
+      min-height: 140px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+    .modalFt{
+      padding: 14px 16px;
+      display:flex;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      flex-wrap: wrap;
+    }
+    .iconBtn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 8px;
+    }
+    .noteDot{
+      display:inline-block;
+      width:8px;height:8px;border-radius:99px;
+      background: rgba(45,212,191,.9);
+      box-shadow: 0 0 0 3px rgba(45,212,191,.18);
+      margin-left: 8px;
+    }
   </style>
 </head>
 
@@ -298,6 +357,7 @@
                   <th>Hora</th>
                   <th>País</th>
                   <th>Monto</th>
+                  <th>Nota</th>
                   <th></th>
                 </tr>
               </thead>
@@ -324,6 +384,25 @@
     </div>
   </div>
 
+  <!-- ===== Modal Nota ===== -->
+  <div id="noteModalOverlay" class="modalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+      <div class="modalHd">
+        <strong id="noteModalTitle">Nota del monto</strong>
+        <button id="noteCloseBtn" type="button" class="mini">Cerrar</button>
+      </div>
+      <div class="modalBd">
+        <label for="noteText">Escribe una nota (opcional)</label>
+        <textarea id="noteText" class="field" placeholder="Ej: Pago de almuerzo, compra, etc."></textarea>
+        <div class="hint">Se guardará en el navegador.</div>
+      </div>
+      <div class="modalFt">
+        <button id="noteClearBtn" type="button" class="btn-danger">Borrar nota</button>
+        <button id="noteSaveBtn" type="button" class="btn-primary">Guardar nota</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Exportación a Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx-chart@1.3.3/dist/xlsx-chart.min.js"></script>
@@ -338,7 +417,7 @@
       MX: { name: "México", currency: "MXN" },
     };
 
-    // entries: { id, dateISO, timeHHMMSS, country, value }
+    // entries: { id, dateISO, timeHHMMSS, country, value, note? }
     let entries = [];
     let activeDate = null;
 
@@ -393,7 +472,10 @@
         if (!raw) return;
 
         const payload = JSON.parse(raw);
-        if (payload && Array.isArray(payload.entries)) entries = payload.entries;
+        if (payload && Array.isArray(payload.entries)) {
+          // Normaliza notas para entradas viejas (sin note)
+          entries = payload.entries.map(e => ({ ...e, note: typeof e.note === "string" ? e.note : "" }));
+        }
       } catch {
         entries = [];
       }
@@ -420,10 +502,14 @@
     const tableEl = document.getElementById("table");
     const entriesBodyEl = document.getElementById("entriesBody");
 
-    const deleteIndexEl = document.getElementById("deleteIndex");
-    const deleteCountEl = document.getElementById("deleteCount");
-    const deleteByIndexBtn = document.getElementById("deleteByIndexBtn");
-    const deleteLastNBtn = document.getElementById("deleteLastNBtn");
+    // Modal refs
+    const noteModalOverlayEl = document.getElementById("noteModalOverlay");
+    const noteTextEl = document.getElementById("noteText");
+    const noteCloseBtn = document.getElementById("noteCloseBtn");
+    const noteSaveBtn = document.getElementById("noteSaveBtn");
+    const noteClearBtn = document.getElementById("noteClearBtn");
+
+    let noteEditingId = null;
 
     function setError(message = "") {
       if (!message) {
@@ -509,6 +595,40 @@
       grandTotalEl.textContent = grandTotal(list).toString();
     }
 
+    function openNoteModal(entryId) {
+      const entry = entries.find(e => e.id === entryId);
+      if (!entry) return;
+
+      noteEditingId = entryId;
+      noteTextEl.value = entry.note || "";
+      noteModalOverlayEl.classList.add("show");
+      noteModalOverlayEl.setAttribute("aria-hidden", "false");
+      setTimeout(() => noteTextEl.focus(), 0);
+    }
+
+    function closeNoteModal() {
+      noteEditingId = null;
+      noteModalOverlayEl.classList.remove("show");
+      noteModalOverlayEl.setAttribute("aria-hidden", "true");
+      noteTextEl.value = "";
+    }
+
+    function saveNoteFromModal() {
+      if (!noteEditingId) return;
+      const idx = entries.findIndex(e => e.id === noteEditingId);
+      if (idx === -1) return;
+
+      entries[idx].note = (noteTextEl.value || "").trim();
+      save();
+      renderAll();
+      closeNoteModal();
+    }
+
+    function clearNoteFromModal() {
+      noteTextEl.value = "";
+      noteTextEl.focus();
+    }
+
     function renderEntries(list) {
       const dateLabel = activeDate ? ` · ${activeDate}` : "";
       statsTextEl.textContent = `${list.length} entrad${list.length === 1 ? "a" : "as"}${dateLabel}`;
@@ -545,6 +665,23 @@
         const tdAmount = document.createElement("td");
         tdAmount.textContent = formatMoney(e.country, e.value);
 
+        // Nota: botón con icono (SVG) y un indicador si ya tiene nota
+        const tdNote = document.createElement("td");
+        const noteBtn = document.createElement("button");
+        noteBtn.type = "button";
+        noteBtn.className = "mini iconBtn";
+        noteBtn.title = e.note ? "Ver/editar nota" : "Agregar nota";
+        noteBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2"/>
+            <path d="M8 8h8M8 12h8M8 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Nota
+          ${e.note ? `<span class="noteDot" aria-hidden="true"></span>` : ``}
+        `;
+        noteBtn.addEventListener("click", () => openNoteModal(e.id));
+        tdNote.appendChild(noteBtn);
+
         const tdAction = document.createElement("td");
         const del = document.createElement("button");
         del.className = "mini btn-danger";
@@ -557,6 +694,7 @@
         tr.appendChild(tdTime);
         tr.appendChild(tdCountry);
         tr.appendChild(tdAmount);
+        tr.appendChild(tdNote);
         tr.appendChild(tdAction);
 
         entriesBodyEl.appendChild(tr);
@@ -587,7 +725,7 @@
       const country = countryEl.value;
       const { dateISO, timeHHMMSS } = nowParts();
 
-      entries.push({ id: uid(), dateISO, timeHHMMSS, country, value });
+      entries.push({ id: uid(), dateISO, timeHHMMSS, country, value, note: "" });
       activeDate = dateISO;
       save();
 
@@ -615,36 +753,10 @@
       amountEl.focus();
     }
 
-    function removeByIndex(oneBasedIndex) {
-      setError("");
-      const idx = Number(oneBasedIndex);
-      if (!Number.isInteger(idx) || idx < 1 || idx > entries.length) {
-        setError(`Índice inválido. Debe estar entre 1 y ${entries.length}.`);
-        return;
-      }
-      entries.splice(idx - 1, 1);
-      save();
-      renderAll();
-    }
-
     function removeById(id) {
       const idx = entries.findIndex((entry) => entry.id === id);
       if (idx === -1) return;
       entries.splice(idx, 1);
-      save();
-      renderAll();
-    }
-
-    function removeLastN(n) {
-      setError("");
-      const count = Number(n);
-      if (!Number.isInteger(count) || count < 1) {
-        setError("Ingresa un número entero válido para eliminar N últimos (>= 1).");
-        return;
-      }
-      if (entries.length === 0) return;
-      const toRemove = Math.min(count, entries.length);
-      entries.splice(entries.length - toRemove, toRemove);
       save();
       renderAll();
     }
@@ -656,9 +768,9 @@
       const exportDate = activeDate || nowParts().dateISO;
 
       // Hoja Datos
-      const dataRows = [["Fecha", "Hora", "País", "Moneda", "Monto"]];
+      const dataRows = [["Fecha", "Hora", "País", "Moneda", "Monto", "Nota"]];
       for (const e of visibleEntries) {
-        dataRows.push([e.dateISO, e.timeHHMMSS, countries[e.country].name, countries[e.country].currency, e.value]);
+        dataRows.push([e.dateISO, e.timeHHMMSS, countries[e.country].name, countries[e.country].currency, e.value, e.note || ""]);
       }
 
       // Hoja Resumen
@@ -670,7 +782,7 @@
 
       const wsData = XLSX.utils.aoa_to_sheet(dataRows);
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
-      wsData["!cols"] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
+      wsData["!cols"] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 28 }];
       wsSummary["!cols"] = [{ wch: 14 }, { wch: 10 }, { wch: 14 }];
 
       // Workbook base (por si la gráfica no se puede generar)
@@ -732,19 +844,19 @@
     resetBtn.addEventListener("click", resetAll);
     exportBtn.addEventListener("click", exportExcel);
 
-    if (deleteByIndexBtn && deleteIndexEl) {
-      deleteByIndexBtn.addEventListener("click", () => {
-        removeByIndex(deleteIndexEl.value);
-        deleteIndexEl.value = "";
-      });
-    }
-
-    if (deleteLastNBtn && deleteCountEl) {
-      deleteLastNBtn.addEventListener("click", () => {
-        removeLastN(deleteCountEl.value);
-        deleteCountEl.value = "";
-      });
-    }
+    // Modal eventos
+    noteSaveBtn.addEventListener("click", saveNoteFromModal);
+    noteClearBtn.addEventListener("click", clearNoteFromModal);
+    noteCloseBtn.addEventListener("click", closeNoteModal);
+    noteModalOverlayEl.addEventListener("click", (e) => {
+      if (e.target === noteModalOverlayEl) closeNoteModal(); // click fuera del modal
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && noteModalOverlayEl.classList.contains("show")) closeNoteModal();
+      if (e.key === "Enter" && noteModalOverlayEl.classList.contains("show") && (e.ctrlKey || e.metaKey)) {
+        saveNoteFromModal(); // Ctrl+Enter guarda
+      }
+    });
 
     amountEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") addEntry();
