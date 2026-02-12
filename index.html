@@ -150,6 +150,23 @@
       background: rgba(255,255,255,.04);
     }
     .deleteBox .field{ padding: 10px 12px; border-radius: 12px; }
+    .history{
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+    }
+    .date-list{ display:flex; flex-wrap: wrap; gap: 8px; }
+    .date-btn{
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .date-btn.active{
+      background: linear-gradient(135deg, rgba(124,92,255,.95), rgba(45,212,191,.70));
+      border-color: rgba(255,255,255,.18);
+    }
 
     .table{
       width: 100%;
@@ -265,6 +282,11 @@
 
           <div id="error" class="error"></div>
 
+          <div class="history">
+            <label>Historial por fecha</label>
+            <div id="historyDates" class="date-list"></div>
+          </div>
+
           <div style="margin-top:16px;">
             <div id="emptyState" class="empty">Aún no hay entradas.</div>
 
@@ -318,6 +340,7 @@
 
     // entries: { id, dateISO, timeHHMMSS, country, value }
     let entries = [];
+    let activeDate = null;
 
     function pad2(n){ return String(n).padStart(2, "0"); }
 
@@ -340,14 +363,14 @@
       return value;
     }
 
-    function totalsByCountry() {
+    function totalsByCountry(list = entries) {
       const totals = { PE: 0, CO: 0, AR: 0, MX: 0 };
-      for (const e of entries) totals[e.country] += e.value;
+      for (const e of list) totals[e.country] += e.value;
       return totals;
     }
 
-    function grandTotal() {
-      return entries.reduce((acc, e) => acc + e.value, 0);
+    function grandTotal(list = entries) {
+      return list.reduce((acc, e) => acc + e.value, 0);
     }
 
     function formatMoney(code, value) {
@@ -388,6 +411,7 @@
     const exportBtn = document.getElementById("exportBtn");
 
     const errorEl = document.getElementById("error");
+    const historyDatesEl = document.getElementById("historyDates");
     const totalsEl = document.getElementById("totals");
     const grandTotalEl = document.getElementById("grandTotal");
     const statsTextEl = document.getElementById("statsText");
@@ -411,8 +435,58 @@
       errorEl.classList.add("show");
     }
 
-    function renderTotals() {
-      const totals = totalsByCountry();
+    function dateStats() {
+      const stats = new Map();
+      for (const e of entries) {
+        stats.set(e.dateISO, (stats.get(e.dateISO) || 0) + 1);
+      }
+      return Array.from(stats.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([date, count]) => ({ date, count }));
+    }
+
+    function ensureActiveDate() {
+      const stats = dateStats();
+      if (stats.length === 0) {
+        activeDate = null;
+        return stats;
+      }
+      if (!activeDate || !stats.some((stat) => stat.date === activeDate)) {
+        activeDate = stats[0].date;
+      }
+      return stats;
+    }
+
+    function getVisibleEntries() {
+      if (!activeDate) return [];
+      return entries.filter((entry) => entry.dateISO === activeDate);
+    }
+
+    function renderHistory(stats) {
+      historyDatesEl.innerHTML = "";
+      if (stats.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "muted";
+        empty.textContent = "Sin historial aún.";
+        historyDatesEl.appendChild(empty);
+        return;
+      }
+
+      stats.forEach((stat) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `date-btn${stat.date === activeDate ? " active" : ""}`;
+        btn.textContent = `${stat.date} (${stat.count})`;
+        btn.addEventListener("click", () => {
+          activeDate = stat.date;
+          renderAll();
+        });
+        historyDatesEl.appendChild(btn);
+      });
+    }
+
+    function renderTotals(list) {
+      const totals = totalsByCountry(list);
       totalsEl.innerHTML = "";
 
       for (const code of Object.keys(countries)) {
@@ -432,16 +506,20 @@
         totalsEl.appendChild(row);
       }
 
-      grandTotalEl.textContent = grandTotal().toString();
+      grandTotalEl.textContent = grandTotal(list).toString();
     }
 
-    function renderEntries() {
-      statsTextEl.textContent = `${entries.length} entrad${entries.length === 1 ? "a" : "as"}`;
+    function renderEntries(list) {
+      const dateLabel = activeDate ? ` · ${activeDate}` : "";
+      statsTextEl.textContent = `${list.length} entrad${list.length === 1 ? "a" : "as"}${dateLabel}`;
 
-      if (entries.length === 0) {
+      if (list.length === 0) {
         emptyStateEl.style.display = "block";
         tableEl.style.display = "none";
         entriesBodyEl.innerHTML = "";
+        emptyStateEl.textContent = entries.length === 0
+          ? "Aún no hay entradas."
+          : `No hay entradas para ${activeDate}.`;
         return;
       }
 
@@ -449,7 +527,7 @@
       tableEl.style.display = "table";
       entriesBodyEl.innerHTML = "";
 
-      entries.forEach((e, idx) => {
+      list.forEach((e, idx) => {
         const tr = document.createElement("tr");
 
         const tdIdx = document.createElement("td");
@@ -471,7 +549,7 @@
         const del = document.createElement("button");
         del.className = "mini btn-danger";
         del.textContent = "Eliminar";
-        del.addEventListener("click", () => removeByIndex(idx + 1));
+        del.addEventListener("click", () => removeById(e.id));
         tdAction.appendChild(del);
 
         tr.appendChild(tdIdx);
@@ -486,10 +564,13 @@
     }
 
     function renderAll() {
+      const stats = ensureActiveDate();
+      const visibleEntries = getVisibleEntries();
       undoBtn.disabled = entries.length === 0;
-      exportBtn.disabled = entries.length === 0;
-      renderTotals();
-      renderEntries();
+      exportBtn.disabled = visibleEntries.length === 0;
+      renderHistory(stats);
+      renderTotals(visibleEntries);
+      renderEntries(visibleEntries);
     }
 
     function addEntry() {
@@ -507,6 +588,7 @@
       const { dateISO, timeHHMMSS } = nowParts();
 
       entries.push({ id: uid(), dateISO, timeHHMMSS, country, value });
+      activeDate = dateISO;
       save();
 
       amountEl.value = "";
@@ -545,6 +627,14 @@
       renderAll();
     }
 
+    function removeById(id) {
+      const idx = entries.findIndex((entry) => entry.id === id);
+      if (idx === -1) return;
+      entries.splice(idx, 1);
+      save();
+      renderAll();
+    }
+
     function removeLastN(n) {
       setError("");
       const count = Number(n);
@@ -561,16 +651,18 @@
 
     async function exportExcel() {
       setError("");
-      if (entries.length === 0) return;
+      const visibleEntries = getVisibleEntries();
+      if (visibleEntries.length === 0) return;
+      const exportDate = activeDate || nowParts().dateISO;
 
       // Hoja Datos
       const dataRows = [["Fecha", "Hora", "País", "Moneda", "Monto"]];
-      for (const e of entries) {
+      for (const e of visibleEntries) {
         dataRows.push([e.dateISO, e.timeHHMMSS, countries[e.country].name, countries[e.country].currency, e.value]);
       }
 
       // Hoja Resumen
-      const totals = totalsByCountry();
+      const totals = totalsByCountry(visibleEntries);
       const summaryRows = [["País", "Moneda", "Total"]];
       for (const code of Object.keys(countries)) {
         summaryRows.push([countries[code].name, countries[code].currency, totals[code]]);
@@ -614,7 +706,7 @@
             XLSX.utils.book_append_sheet(wbChart, wsData, "Datos");
             XLSX.utils.book_append_sheet(wbChart, wsSummary, "Resumen");
 
-            XLSX.writeFile(wbChart, `sumas-por-pais_${nowParts().dateISO}.xlsx`);
+            XLSX.writeFile(wbChart, `sumas-por-pais_${exportDate}.xlsx`);
             resolve();
           });
         });
@@ -624,7 +716,7 @@
         console.warn("No se pudo generar la gráfica, exportando sin gráfica.", e);
       }
 
-      XLSX.writeFile(wbBase, `sumas-por-pais_${nowParts().dateISO}.xlsx`);
+      XLSX.writeFile(wbBase, `sumas-por-pais_${exportDate}.xlsx`);
     }
 
     // Reloj
@@ -640,15 +732,19 @@
     resetBtn.addEventListener("click", resetAll);
     exportBtn.addEventListener("click", exportExcel);
 
-    deleteByIndexBtn.addEventListener("click", () => {
-      removeByIndex(deleteIndexEl.value);
-      deleteIndexEl.value = "";
-    });
+    if (deleteByIndexBtn && deleteIndexEl) {
+      deleteByIndexBtn.addEventListener("click", () => {
+        removeByIndex(deleteIndexEl.value);
+        deleteIndexEl.value = "";
+      });
+    }
 
-    deleteLastNBtn.addEventListener("click", () => {
-      removeLastN(deleteCountEl.value);
-      deleteCountEl.value = "";
-    });
+    if (deleteLastNBtn && deleteCountEl) {
+      deleteLastNBtn.addEventListener("click", () => {
+        removeLastN(deleteCountEl.value);
+        deleteCountEl.value = "";
+      });
+    }
 
     amountEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") addEntry();
