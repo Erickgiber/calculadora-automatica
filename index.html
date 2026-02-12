@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sumas por país | Persistencia + Exportación</title>
+  <style>
+    :root{
+      --bg0:#0b1220; --bg1:#0f1b33;
+      --card: rgba(255,255,255,.08); --card2: rgba(255,255,255,.06);
+      --stroke: rgba(255,255,255,.12);
+      --text:#eaf0ff; --muted: rgba(234,240,255,.72);
+      --brand:#7c5cff; --brand2:#2dd4bf;
+      --danger:#ff4d6d;
+      --shadow: 0 16px 40px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(1100px 500px at 10% -10%, rgba(124,92,255,.40), transparent 55%),
+        radial-gradient(900px 520px at 90% 0%, rgba(45,212,191,.25), transparent 55%),
+        radial-gradient(800px 600px at 50% 120%, rgba(255,77,109,.18), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      min-height: 100vh;
+    }
+    .wrap{ max-width: 1120px; margin: 0 auto; padding: 28px 18px 56px; }
+    header{
+      display:flex; justify-content: space-between; align-items: flex-start;
+      gap: 16px; margin-bottom: 18px; flex-wrap: wrap;
+    }
+    h1{ margin:0; font-size: clamp(22px, 3vw, 30px); letter-spacing:.2px; }
+    .subtitle{ color: var(--muted); font-size: 14px; line-height: 1.45; max-width: 85ch; }
+    .rightHeader{ display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content:flex-end; }
+    .pill{
+      display:inline-flex; align-items:center; gap:10px;
+      padding: 10px 12px; border:1px solid var(--stroke);
+      background: rgba(255,255,255,.05); border-radius: 999px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+      color: var(--muted); font-size: 13px; white-space: nowrap;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:99px;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 0 0 4px rgba(124,92,255,.16);
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
+    .card{
+      background: linear-gradient(180deg, var(--card), var(--card2));
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .hd{
+      padding: 16px 16px 10px;
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .hd h2{
+      margin:0;
+      font-size: 13px;
+      letter-spacing: .35px;
+      text-transform: uppercase;
+      color: rgba(234,240,255,.86);
+    }
+    .bd{ padding: 16px; }
+    .rowTools{ display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content:flex-end; }
+    .mini{ padding: 7px 10px; border-radius: 12px; font-weight: 900; font-size: 12px; }
+
+    label{ display:block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+    .form{
+      display:grid;
+      grid-template-columns: 1fr 220px 170px;
+      gap: 10px;
+    }
+    @media (max-width: 720px){ .form{ grid-template-columns: 1fr; } }
+
+    .field{
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(10,16,30,.42);
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+      width:100%;
+    }
+    .field:focus{
+      border-color: rgba(124,92,255,.7);
+      box-shadow: 0 0 0 4px rgba(124,92,255,.18);
+    }
+    button{
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 14px;
+      cursor:pointer;
+      transition: transform .08s ease, background .15s ease, opacity .15s ease;
+      font-weight: 800;
+    }
+    button:hover{ background: rgba(255,255,255,.10); }
+    button:active{ transform: translateY(1px); }
+    button:disabled{ opacity: .5; cursor:not-allowed; }
+    .btn-primary{
+      background: linear-gradient(135deg, rgba(124,92,255,.95), rgba(45,212,191,.70));
+      border-color: rgba(255,255,255,.18);
+    }
+    .btn-primary:hover{
+      background: linear-gradient(135deg, rgba(124,92,255,1), rgba(45,212,191,.85));
+    }
+    .btn-danger{
+      border-color: rgba(255,77,109,.35);
+      background: rgba(255,77,109,.10);
+    }
+    .btn-danger:hover{ background: rgba(255,77,109,.16); }
+    .actions{ display:flex; gap:10px; flex-wrap: wrap; margin-top: 12px; align-items:center; }
+    .hint{ margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .error{
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,77,109,.30);
+      background: rgba(255,77,109,.10);
+      color: rgba(255,214,222,.98);
+      display:none;
+    }
+    .error.show{ display:block; }
+
+    .deleteBox{
+      display:flex; gap:10px; align-items:flex-end; flex-wrap: wrap;
+      margin-top: 14px; padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+    }
+    .deleteBox .field{ padding: 10px 12px; border-radius: 12px; }
+
+    .table{
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow:hidden;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+    }
+    .table th, .table td{
+      padding: 12px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      text-align: left;
+      font-size: 13px;
+      color: rgba(234,240,255,.90);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .table th{
+      font-size: 12px;
+      color: rgba(234,240,255,.70);
+      text-transform: uppercase;
+      letter-spacing: .35px;
+      background: rgba(255,255,255,.03);
+    }
+    .table tr:last-child td{ border-bottom: none; }
+    .muted{ color: var(--muted); }
+    .empty{
+      padding: 14px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      border: 1px dashed rgba(255,255,255,.18);
+      border-radius: 16px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .totals{ display:grid; grid-template-columns: 1fr; gap: 10px; }
+    .total-row{
+      display:flex; justify-content: space-between; align-items: baseline; gap: 10px;
+      padding: 12px 12px; border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+    }
+    .total-row .name{ display:flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .total-row .name strong{ font-size: 14px; font-weight: 900; }
+    .total-row .name span{ font-size: 12px; color: var(--muted); }
+    .total-row .value{ font-size: 16px; font-weight: 950; }
+    .grand{
+      margin-top: 10px; padding: 14px 12px; border-radius: 16px;
+      border: 1px solid rgba(124,92,255,.28);
+      background: linear-gradient(180deg, rgba(124,92,255,.12), rgba(45,212,191,.08));
+    }
+    .grand .label{ color: var(--muted); font-size: 12px; }
+    .grand .value{ font-size: 20px; font-weight: 1000; margin-top: 6px; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Sumas por país (monedas)</h1>
+        <div class="subtitle">
+          Cada entrada guarda <b>Fecha (YYYY-MM-DD)</b> y <b>Hora (HH:mm:ss)</b>, se persiste en <b>LocalStorage</b>,
+          puedes eliminar entradas y exportar un <b>Excel</b> con resumen por país.
+        </div>
+      </div>
+
+      <div class="rightHeader">
+        <div class="pill"><span class="dot"></span> <span>Hoy: <b id="today"></b></span></div>
+        <div class="pill"><span class="dot"></span> <span>Hora: <b id="clock"></b></span></div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <div class="hd">
+          <h2>Ingreso</h2>
+          <div class="rowTools">
+            <span class="muted" id="statsText">0 entradas</span>
+            <button id="exportBtn" class="mini btn-primary" type="button">Exportar Excel</button>
+          </div>
+        </div>
+
+        <div class="bd">
+          <div class="form">
+            <div>
+              <label for="amount">Monto</label>
+              <input id="amount" class="field" type="text" inputmode="decimal" placeholder="Ej: 10, 2.5, -3" />
+            </div>
+
+            <div>
+              <label for="country">País</label>
+              <select id="country" class="field">
+                <option value="PE">Perú (PEN)</option>
+                <option value="CO">Colombia (COP)</option>
+                <option value="AR">Argentina (ARS)</option>
+                <option value="MX">México (MXN)</option>
+              </select>
+            </div>
+
+            <div>
+              <label>&nbsp;</label>
+              <button id="addBtn" class="btn-primary" type="button">Agregar</button>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="undoBtn" type="button">Deshacer último</button>
+            <button id="resetBtn" class="btn-danger" type="button">Reiniciar todo</button>
+          </div>
+
+          <div id="error" class="error"></div>
+
+          <div style="margin-top:16px;">
+            <div id="emptyState" class="empty">Aún no hay entradas.</div>
+
+            <table id="table" class="table" style="display:none;">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Fecha</th>
+                  <th>Hora</th>
+                  <th>País</th>
+                  <th>Monto</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="entriesBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div class="hd">
+          <h2>Totales</h2>
+          <span class="muted">Por moneda</span>
+        </div>
+        <div class="bd">
+          <div class="totals" id="totals"></div>
+
+          <div class="grand">
+            <div class="label">Total general (solo referencia, sin conversión)</div>
+            <div class="value" id="grandTotal">0</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Exportación a Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-chart@1.3.3/dist/xlsx-chart.min.js"></script>
+
+  <script>
+    const STORAGE_KEY = "sumasPorPais.v2"; // v2: agrega hora
+
+    const countries = {
+      PE: { name: "Perú", currency: "PEN" },
+      CO: { name: "Colombia", currency: "COP" },
+      AR: { name: "Argentina", currency: "ARS" },
+      MX: { name: "México", currency: "MXN" },
+    };
+
+    // entries: { id, dateISO, timeHHMMSS, country, value }
+    let entries = [];
+
+    function pad2(n){ return String(n).padStart(2, "0"); }
+
+    function nowParts() {
+      const d = new Date();
+      const dateISO = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+      const timeHHMMSS = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+      return { dateISO, timeHHMMSS };
+    }
+
+    function uid() {
+      return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+    }
+
+    function parseAmount(raw) {
+      const normalized = raw.trim().replace(",", ".");
+      if (normalized === "") return null;
+      const value = Number(normalized);
+      if (!Number.isFinite(value)) return null;
+      return value;
+    }
+
+    function totalsByCountry() {
+      const totals = { PE: 0, CO: 0, AR: 0, MX: 0 };
+      for (const e of entries) totals[e.country] += e.value;
+      return totals;
+    }
+
+    function grandTotal() {
+      return entries.reduce((acc, e) => acc + e.value, 0);
+    }
+
+    function formatMoney(code, value) {
+      return new Intl.NumberFormat("es-ES", {
+        style: "currency",
+        currency: countries[code].currency,
+        maximumFractionDigits: 2
+      }).format(value);
+    }
+
+    // LocalStorage
+    function save() {
+      const payload = { version: 2, savedAt: new Date().toISOString(), entries };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    }
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+
+        const payload = JSON.parse(raw);
+        if (payload && Array.isArray(payload.entries)) entries = payload.entries;
+      } catch {
+        entries = [];
+      }
+    }
+
+    // UI refs
+    const todayEl = document.getElementById("today");
+    const clockEl = document.getElementById("clock");
+
+    const amountEl = document.getElementById("amount");
+    const countryEl = document.getElementById("country");
+    const addBtn = document.getElementById("addBtn");
+    const undoBtn = document.getElementById("undoBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const exportBtn = document.getElementById("exportBtn");
+
+    const errorEl = document.getElementById("error");
+    const totalsEl = document.getElementById("totals");
+    const grandTotalEl = document.getElementById("grandTotal");
+    const statsTextEl = document.getElementById("statsText");
+
+    const emptyStateEl = document.getElementById("emptyState");
+    const tableEl = document.getElementById("table");
+    const entriesBodyEl = document.getElementById("entriesBody");
+
+    const deleteIndexEl = document.getElementById("deleteIndex");
+    const deleteCountEl = document.getElementById("deleteCount");
+    const deleteByIndexBtn = document.getElementById("deleteByIndexBtn");
+    const deleteLastNBtn = document.getElementById("deleteLastNBtn");
+
+    function setError(message = "") {
+      if (!message) {
+        errorEl.textContent = "";
+        errorEl.classList.remove("show");
+        return;
+      }
+      errorEl.textContent = message;
+      errorEl.classList.add("show");
+    }
+
+    function renderTotals() {
+      const totals = totalsByCountry();
+      totalsEl.innerHTML = "";
+
+      for (const code of Object.keys(countries)) {
+        const row = document.createElement("div");
+        row.className = "total-row";
+
+        const left = document.createElement("div");
+        left.className = "name";
+        left.innerHTML = `<strong>${countries[code].name}</strong><span>${countries[code].currency}</span>`;
+
+        const right = document.createElement("div");
+        right.className = "value";
+        right.textContent = formatMoney(code, totals[code]);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        totalsEl.appendChild(row);
+      }
+
+      grandTotalEl.textContent = grandTotal().toString();
+    }
+
+    function renderEntries() {
+      statsTextEl.textContent = `${entries.length} entrad${entries.length === 1 ? "a" : "as"}`;
+
+      if (entries.length === 0) {
+        emptyStateEl.style.display = "block";
+        tableEl.style.display = "none";
+        entriesBodyEl.innerHTML = "";
+        return;
+      }
+
+      emptyStateEl.style.display = "none";
+      tableEl.style.display = "table";
+      entriesBodyEl.innerHTML = "";
+
+      entries.forEach((e, idx) => {
+        const tr = document.createElement("tr");
+
+        const tdIdx = document.createElement("td");
+        tdIdx.textContent = String(idx + 1);
+
+        const tdDate = document.createElement("td");
+        tdDate.innerHTML = `<span class="muted">${e.dateISO}</span>`;
+
+        const tdTime = document.createElement("td");
+        tdTime.innerHTML = `<span class="muted">${e.timeHHMMSS}</span>`;
+
+        const tdCountry = document.createElement("td");
+        tdCountry.innerHTML = `<strong>${countries[e.country].name}</strong> <span class="muted">(${countries[e.country].currency})</span>`;
+
+        const tdAmount = document.createElement("td");
+        tdAmount.textContent = formatMoney(e.country, e.value);
+
+        const tdAction = document.createElement("td");
+        const del = document.createElement("button");
+        del.className = "mini btn-danger";
+        del.textContent = "Eliminar";
+        del.addEventListener("click", () => removeByIndex(idx + 1));
+        tdAction.appendChild(del);
+
+        tr.appendChild(tdIdx);
+        tr.appendChild(tdDate);
+        tr.appendChild(tdTime);
+        tr.appendChild(tdCountry);
+        tr.appendChild(tdAmount);
+        tr.appendChild(tdAction);
+
+        entriesBodyEl.appendChild(tr);
+      });
+    }
+
+    function renderAll() {
+      undoBtn.disabled = entries.length === 0;
+      exportBtn.disabled = entries.length === 0;
+      renderTotals();
+      renderEntries();
+    }
+
+    function addEntry() {
+      setError("");
+
+      const value = parseAmount(amountEl.value);
+      if (value === null) {
+        setError("Ingresa un monto válido (ej: 10, 2.5, -3).");
+        amountEl.focus();
+        amountEl.select();
+        return;
+      }
+
+      const country = countryEl.value;
+      const { dateISO, timeHHMMSS } = nowParts();
+
+      entries.push({ id: uid(), dateISO, timeHHMMSS, country, value });
+      save();
+
+      amountEl.value = "";
+      amountEl.focus();
+      renderAll();
+    }
+
+    function undo() {
+      setError("");
+      if (entries.length === 0) return;
+      entries.pop();
+      save();
+      renderAll();
+      amountEl.focus();
+    }
+
+    function resetAll() {
+      setError("");
+      if (!confirm("¿Seguro que deseas reiniciar todo? Se eliminarán todas las entradas guardadas.")) return;
+      entries = [];
+      save();
+      amountEl.value = "";
+      renderAll();
+      amountEl.focus();
+    }
+
+    function removeByIndex(oneBasedIndex) {
+      setError("");
+      const idx = Number(oneBasedIndex);
+      if (!Number.isInteger(idx) || idx < 1 || idx > entries.length) {
+        setError(`Índice inválido. Debe estar entre 1 y ${entries.length}.`);
+        return;
+      }
+      entries.splice(idx - 1, 1);
+      save();
+      renderAll();
+    }
+
+    function removeLastN(n) {
+      setError("");
+      const count = Number(n);
+      if (!Number.isInteger(count) || count < 1) {
+        setError("Ingresa un número entero válido para eliminar N últimos (>= 1).");
+        return;
+      }
+      if (entries.length === 0) return;
+      const toRemove = Math.min(count, entries.length);
+      entries.splice(entries.length - toRemove, toRemove);
+      save();
+      renderAll();
+    }
+
+    async function exportExcel() {
+      setError("");
+      if (entries.length === 0) return;
+
+      // Hoja Datos
+      const dataRows = [["Fecha", "Hora", "País", "Moneda", "Monto"]];
+      for (const e of entries) {
+        dataRows.push([e.dateISO, e.timeHHMMSS, countries[e.country].name, countries[e.country].currency, e.value]);
+      }
+
+      // Hoja Resumen
+      const totals = totalsByCountry();
+      const summaryRows = [["País", "Moneda", "Total"]];
+      for (const code of Object.keys(countries)) {
+        summaryRows.push([countries[code].name, countries[code].currency, totals[code]]);
+      }
+
+      const wsData = XLSX.utils.aoa_to_sheet(dataRows);
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      wsData["!cols"] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
+      wsSummary["!cols"] = [{ wch: 14 }, { wch: 10 }, { wch: 14 }];
+
+      // Workbook base (por si la gráfica no se puede generar)
+      const wbBase = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wbBase, wsData, "Datos");
+      XLSX.utils.book_append_sheet(wbBase, wsSummary, "Resumen");
+
+      // Intento de gráfica (xlsx-chart). Si falla, exporta sin gráfica.
+      try {
+        const chartData = summaryRows.slice(1).map(r => ({ country: r[0], total: r[2] }));
+        const xlsxChart = new XlsxChart();
+        const opts = {
+          chart: "column",
+          titles: ["Total por país"],
+          fields: ["total"],
+          data: chartData.map(r => ({ country: r.country, total: r.total })),
+        };
+
+        await new Promise((resolve, reject) => {
+          xlsxChart.generate(opts, (err, chartXlsx) => {
+            if (err) return reject(err);
+
+            const wbChart = XLSX.read(chartXlsx, { type: "buffer" });
+
+            // Renombrar la hoja del gráfico a "Gráfico"
+            const firstName = wbChart.SheetNames[0];
+            const wsChart = wbChart.Sheets[firstName];
+            delete wbChart.Sheets[firstName];
+            wbChart.SheetNames[0] = "Gráfico";
+            wbChart.Sheets["Gráfico"] = wsChart;
+
+            // Agregar nuestras hojas
+            XLSX.utils.book_append_sheet(wbChart, wsData, "Datos");
+            XLSX.utils.book_append_sheet(wbChart, wsSummary, "Resumen");
+
+            XLSX.writeFile(wbChart, `sumas-por-pais_${nowParts().dateISO}.xlsx`);
+            resolve();
+          });
+        });
+
+        return;
+      } catch (e) {
+        console.warn("No se pudo generar la gráfica, exportando sin gráfica.", e);
+      }
+
+      XLSX.writeFile(wbBase, `sumas-por-pais_${nowParts().dateISO}.xlsx`);
+    }
+
+    // Reloj
+    function tickClock(){
+      const { dateISO, timeHHMMSS } = nowParts();
+      todayEl.textContent = dateISO;
+      clockEl.textContent = timeHHMMSS;
+    }
+
+    // Eventos
+    addBtn.addEventListener("click", addEntry);
+    undoBtn.addEventListener("click", undo);
+    resetBtn.addEventListener("click", resetAll);
+    exportBtn.addEventListener("click", exportExcel);
+
+    deleteByIndexBtn.addEventListener("click", () => {
+      removeByIndex(deleteIndexEl.value);
+      deleteIndexEl.value = "";
+    });
+
+    deleteLastNBtn.addEventListener("click", () => {
+      removeLastN(deleteCountEl.value);
+      deleteCountEl.value = "";
+    });
+
+    amountEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addEntry();
+      if (e.key === "Escape") resetAll();
+    });
+
+    // Init
+    load();
+    renderAll();
+    tickClock();
+    setInterval(tickClock, 1000);
+    amountEl.focus();
+  </script>
+</body>
+</html>
